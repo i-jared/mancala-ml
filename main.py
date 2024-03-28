@@ -2,23 +2,21 @@
 # coding: utf-8
 
 # ### Mancala Reinforcement Learning Algorithm
-# 
+
+
 # **things I need:**
-# 
+
 # - an environment (mancala board)
 # - a policy (epsilon greedy)
 # - a value function (value of each state)
 # - a model (predicts next state and reward)
-# 
+
 # **procedure:**
-# 
+
 # - make a q network
 # - make a history of all states
 # - calculate the reward
 # - every 4 steps update the q network
-# 
-
-# In[18]:
 
 
 import numpy as np
@@ -27,15 +25,13 @@ from typing import List
 from enum import Enum
 
 
-# In[4]:
-
-
 class Activation(Enum):
     RELU = 0
     SIGMOID = 1
 
+
 class QLayer():
-    def __init__(self, input_size : int, output_size : int, activation : Activation):
+    def __init__(self, input_size: int, output_size: int, activation: Activation):
         self.output_size = output_size
         self.input_size = input_size
         self.W = np.random.rand(input_size, output_size) - 1
