@@ -8,5 +8,5 @@ A machine learning algorithm that learns and plays mancala better than my wife
 
 ## Milestones
 - [x] follows the rules of mancala
-- [ ] descends *at all*
+- [x] descends *at all*
 - [ ] beats shelby
