@@ -1,68 +1,104 @@
-from agents import RandomAgent, HumanAgent, RobotAgent
-from layer import Activation, QLayer
+import torch
+from agents import HumanAgent, RandomAgent
 from mancala import MancalaBoard
-import time
-
-from network import QNetwork
+from torch_network import NeuralNetwork
 
 
-def test_random_agent():
-    agent = RandomAgent(0)
+def test_model_pytorch_human():
+    model = NeuralNetwork()
+    model.load_state_dict(torch.load('output/model.pth'))
+    human = HumanAgent()
 
-    game_over = False
     env = MancalaBoard()
-    board = env.board
-    while not game_over:
-        action = agent.decide(board)
-        board, _, game_over = env.step(action)
-        time.sleep(5)
-        print(env)
+    state = torch.tensor(env.reset() / 48.0).float()
+    done = False
+    player = 0
 
-
-def test_human_agent():
-    agent1 = HumanAgent()
-    agent2 = RandomAgent(1)
-
-    game_over = False
-    env = MancalaBoard()
-    board = env.board
-    current_player = 0
-    while not game_over:
-        print(env)
-        if current_player == 0:
-            player = agent1
+    while not done:
+        if player == 0:
+            with torch.no_grad():
+                q_pred = model(state)
+            action = (torch.where(state[:6] > 0 , 1, 0)*q_pred).argmax().item() # max
+            state, player, done = env.step_test(action, player)
+            state = torch.tensor(state / 48.0).float()
         else:
-            player = agent2
-        action1 = player.decide(board)
-        board, _, game_over, current_player = env.step(action1)
-
-
-def test_robot_agent():
-    net1 = QNetwork(
-        [
-            QLayer(14, 64, Activation.RELU),
-            QLayer(64, 64, Activation.RELU),
-            QLayer(64, 6, Activation.NONE),
-        ],
-        0.01,
-    )
-    agent1 = RobotAgent(net1, 0)
-    agent2 = RandomAgent(1)
-
-    game_over = False
-    env = MancalaBoard()
-    board = env.board
-    current_player = 0
-    while not game_over:
-        if current_player == 0:
-            player = agent1
-        else:
-            player = agent2
-        action1 = player.decide(board)
-        board, _, game_over, current_player = env.step(action1)
-        time.sleep(5)
+            action = human.decide(env.board)
+            state, player, done = env.step_test(action, player)
+            state = torch.tensor(state / 48.0).float()
         print(env)
+
+def test_model_pytorch_random():
+    model = NeuralNetwork()
+    model.load_state_dict(torch.load('output/model.pth'))
+    env = MancalaBoard()
+    robot = RandomAgent(1)
+    wins = []
+
+    ## Test going first
+    for _ in range(1000):
+        player = 0
+        done = False
+        state = torch.tensor(env.reset() / 48.0).float()
+        while not done:
+            if player == 0:
+                with torch.no_grad():
+                    q_pred = model(state)
+                action = (torch.where(state[:6] > 0 , 1, 0)*q_pred).argmax().item() # max
+                state, player, done = env.step_test(action, player)
+                state = torch.tensor(state / 48.0).float()
+            else:
+                action = robot.decide(env.board)
+                state, player, done = env.step_test(action, player)
+                state = torch.tensor(state / 48.0).float()
+        wins.append(env.board[6] > env.board[13])
+
+    print(f"win percentage (going first): {sum(wins) / len(wins)}")
+
+
+    ## Now test going second
+    robot = RandomAgent(0)
+    wins = []
+
+    for _ in range(1000):
+        player = 0
+        done = False
+        state = torch.tensor(env.reset() / 48.0).float()
+        while not done:
+            if player == 1:
+                with torch.no_grad():
+                    q_pred = model(torch.cat((state[7:], state[:7])))
+
+                action = (torch.where(state[7:13] > 0 , 1, 0)*q_pred).argmax().item() # max
+                state, player, done = env.step_test(action, player)
+                state = torch.tensor(state / 48.0).float()
+            else:
+                action = robot.decide(env.board)
+                state, player, done = env.step_test(action, player)
+                state = torch.tensor(state / 48.0).float()
+        wins.append(env.board[6] > env.board[13])
+    print(f"win percentage (going second): {sum(wins) / len(wins)}")
+
+def test_random():
+    env = MancalaBoard()
+    thing1 = RandomAgent(0)
+    thing2 = RandomAgent(1)
+    wins = []
+
+    for _ in range(1000):
+        player = 0
+        done = False
+        env.reset()
+        while not done:
+            if player == 0:
+                action = thing1.decide(env.board)
+            else:
+                action = thing2.decide(env.board)
+            _, player, done = env.step_test(action, player)
+        wins.append(env.board[6] > env.board[13])
+    print(f"random win percentage (going first): {sum(wins) / len(wins)}")
+
 
 
 if __name__ == "__main__":
-    test_random_agent()
+    test_random()
+

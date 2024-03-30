@@ -45,4 +45,4 @@ def rando(board: np.ndarray, player: int)-> int:
         start = 7
         end = 13
     valid_indices = np.where(board[start:end] > 0)[0]
-    return np.random.choice(valid_indices)
+    return np.random.choice(valid_indices) + start

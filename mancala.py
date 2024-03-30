@@ -44,6 +44,7 @@ class MancalaBoard:
     ) -> int:
         # move all the pieces around the board
         self.board[action] = 0
+        captured = None
         dest_i = (action) % 14
         for _ in range(pieces):
             dest_i = (dest_i + 1) % 14
@@ -60,13 +61,32 @@ class MancalaBoard:
                 or (dest_i >= 7 and dest_i < 13 and player == 1)
             )
         ):
+            captured = self.board[12-dest_i]
             self.board[goal_i] += self.board[dest_i] + self.board[12 - dest_i]
             self.board[dest_i] = 0
             self.board[12 - dest_i] = 0
 
         ### game over cases ###
         self._checkGameOver()
-        return dest_i
+        return dest_i, captured
+
+    def step_test(self, action: int, player: int):
+        """Determines effect of an action on the board."""
+        old_board = self.board.copy()
+        self.turn += 0 if player == 0 else 1
+        pieces: int = self.board[action]
+        goal_i: int = 6 if player == 0 else 13
+        skip: int = 13 if player == 0 else 6
+
+        # move
+        dest_i, _ = self._move(action, pieces, goal_i, skip, player)
+
+        # return the experience data
+        return (
+            self.board.copy(),
+            (player + 1) % 2 if dest_i != goal_i else player,
+            self.gameOver,
+        )
 
     def step(self, action: int):
         """Determines effect of an action on the board."""
@@ -77,23 +97,23 @@ class MancalaBoard:
         skip: int = 13
 
         # move
-        dest_i = self._move(action, pieces, goal_i, skip, 0)
+        dest_i, captured = self._move(action, pieces, goal_i, skip, 0)
 
         ## opponent's moves
         if dest_i != goal_i:
             dest_i, goal_i, skip = 13, 13, 6
             while dest_i == goal_i and not self.gameOver:
                 action = np.random.choice(np.where(self.board[7:13] > 0)[0]) + 7
-                dest_i = self._move(action, self.board[action], goal_i, skip, 1)
+                dest_i, _ = self._move(action, self.board[action], goal_i, skip, 1)
 
         # return the experience data
         return (
             self.board.copy(),
-            self._getReward(old_board, dest_i == goal_i),
+            self._getReward(old_board, dest_i == goal_i, captured),
             self.gameOver,
         )
 
-    def _getReward(self, old_board: np.ndarray, bonus_move: bool = False):
+    def _getReward(self, old_board: np.ndarray, bonus_move: bool = False, captured: int = None):
         """Caluclate reward based on turn and game results."""
         your_score: int = self.board[6]
         their_score: int = self.board[13]
@@ -107,3 +127,8 @@ class MancalaBoard:
         reward = 0.0
         if bonus_move: 
             reward+= 0.1
+        if captured is not None:
+            reward += 0.1 * captured
+        reward += 0.01 * (self.board[6] - old_board[6])
+        reward -= 0.01 * (self.board[13] - old_board[13])
+        return reward
