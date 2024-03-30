@@ -1,8 +1,10 @@
-from typing import List, Tuple
+from collections import deque
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 import torch
 import torch.nn as nn
+from typing import List, Tuple
 
 from mancala import MancalaBoard
 
@@ -41,14 +43,20 @@ def train_model_pytorch():
     target_model = NeuralNetwork().float().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     env = MancalaBoard()
-    reward_hist = []
-    cost_hist = []
-    win_hist = []
+
     discount = 1.01
     epsilon = 1.0
     decay_rate = 0.9999
     min_epsilon = 0.05
     target_update_freq = 10
+
+    max_buffer_size = 10000
+    batch_size = 32
+    replay_buffer = deque(maxlen=max_buffer_size)
+
+    reward_hist = []
+    cost_hist = []
+    win_hist = []
 
     torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -59,31 +67,48 @@ def train_model_pytorch():
         ave_cost = 0.0
         while not done:
             # choose action
-            q_pred = model(state)
             available_actions = torch.where(state[:6] > 0)[0]
             if (torch.rand(1) < epsilon):
                 action = available_actions[torch.randint(len(available_actions), (1,))].item() # random
             else:
+                with torch.no_grad():
+                    q_pred = model(state)
                 action = (torch.where(state[:6] > 0 , 1, 0)*q_pred).argmax().item() # max
 
             # make the action
-            state, reward, done = env.step(action)
-            state = torch.tensor(state / 48.0).float().to(device)
+            next_state, reward, done = env.step(action)
+            next_state = torch.tensor(next_state / 48.0).float().to(device)
+            deque.append((state, action, reward, next_state, done))
             total_reward += reward
 
-            # calculate the loss
-            next_state_vals = torch.zeros(6, device=device)
-            with torch.no_grad():
-                next_state_vals[action] = target_model(state).max(0).values
-            q_actual = reward + discount * next_state_vals
-            mask = torch.zeros(6, device=device)
-            mask[action] = 1
-            loss_fn = nn.SmoothL1Loss()
-            loss = (loss_fn(q_pred * mask, q_actual) * mask).sum()
-            ave_cost += loss.item()
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            if len(deque) >= batch_size:
+                batch = random.sample(deque, batch_size)
+                states, actions, rewards, next_states, dones = zip(*batch)
+
+                states = torch.stack(states)
+                actions = torch.tensor(actions).unsqueeze(1).to(device)
+                rewards = torch.tensor(rewards).unsqueeze(1).to(device)
+                next_states = torch.stack(next_states)
+                dones = torch.tensor(dones).unsqueeze(1).to(device)
+
+                # make predictions
+                q_preds = model(states).gather(1, actions)
+                next_state_qs = torch.zeros(batch_size, device=device)
+                with torch.no_grad():
+                    # TODO: add a mask here...
+                    next_state_qs = target_model(next_states).max(1).values
+                q_actuals = rewards + discount * next_state_qs
+
+                loss_fn = nn.SmoothL1Loss()
+                loss = loss_fn(q_preds, q_actuals.unsqueeze(1))
+                ave_cost += loss.item()
+                optimizer.zero_grad()
+                loss.backward()
+                # TODO: implement policy_net
+                torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
+                optimizer.step()
+
+            state = next_state
 
         if i % target_update_freq == 0:
             target_model.load_state_dict(model.state_dict())

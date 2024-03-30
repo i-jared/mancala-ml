@@ -93,14 +93,17 @@ class MancalaBoard:
             self.gameOver,
         )
 
-    def _getReward(self, old_board: np.ndarray, repeat: bool = False):
+    def _getReward(self, old_board: np.ndarray, bonus_move: bool = False):
         """Caluclate reward based on turn and game results."""
         your_score: int = self.board[6]
         their_score: int = self.board[13]
-        if self.gameOver:
-            return 0.1 if your_score > their_score else -0.1
-        else:
-            return (
-                (your_score - old_board[6] + 2 if repeat else 0)
-                - (their_score - old_board[13])
-            ) / 100.0
+        if (self.gameOver):
+            if (your_score > their_score):
+                return 1.0
+            elif (their_score > your_score):
+                return -1.0
+            else:
+                return 0.0
+        reward = 0.0
+        if bonus_move: 
+            reward+= 0.1
