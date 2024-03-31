@@ -1,11 +1,10 @@
 from collections import deque
-import numpy as np
+import math
 import matplotlib.pyplot as plt
 import random
 import torch
 import torch.nn as nn
-from typing import List, Tuple
-from agents import HumanAgent
+from typing import List
 
 from mancala import MancalaBoard
 from torch_network import NeuralNetwork
@@ -21,7 +20,7 @@ def plot(data: List[float], model: str = None):
 
 
 
-def train_model_pytorch():
+def train_model_pytorch(player: int, run: int):
     # get device
     device = "mps"
     print(f"Using {device} device")
@@ -31,6 +30,8 @@ def train_model_pytorch():
     target_model = NeuralNetwork().float().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     env = MancalaBoard()
+    start = 0 if player == 0 else 7
+    end = 6 if player == 0 else 13
 
     discount = 1.01
     epsilon = 1.0
@@ -48,23 +49,26 @@ def train_model_pytorch():
 
     torch.set_default_tensor_type(torch.FloatTensor)
 
-    for i in range(1000):
-        state = torch.tensor(env.reset() / 48.0).float().to(device)
+    for i in range(500):
+    # for i in range(1):
+        state = torch.tensor(env.reset(player) / 48.0).float().to(device)
         done = False
         total_reward = 0.0
         ave_cost = 0.0
         while not done:
             # choose action
-            available_actions = torch.where(state[:6] > 0)[0]
+            available_actions = torch.where(state[start:end] > 0)[0]
             if (torch.rand(1) < epsilon):
-                action = available_actions[torch.randint(len(available_actions), (1,))].item() # random
+                action = available_actions[torch.randint(len(available_actions), (1,))].item() + start #random
             else:
                 with torch.no_grad():
                     q_pred = model(state)
-                action = (torch.where(state[:6] > 0 , 1, 0)*q_pred).argmax().item() # max
+
+                q_values = torch.where(state[start:end] > 0 , 1, 0)*q_pred
+                action = (torch.where(q_values != 0, q_values, -math.inf)).argmax().item() + start #max
 
             # make the action
-            next_state, reward, done = env.step(action)
+            next_state, reward, done = env.step(action, player)
             next_state = torch.tensor(next_state / 48.0).float().to(device)
             replay_buffer.append((state, action, reward, next_state, done))
             total_reward += reward
@@ -104,23 +108,23 @@ def train_model_pytorch():
             for key in model_dict:
                 target_dict[key] = model_dict[key] * tau + target_dict[key] * (1 - tau)
             target_model.load_state_dict(target_dict)
-
         epsilon = max(epsilon * decay_rate, min_epsilon)
-        win_hist.append(env.board[6] > env.board[13])
+        win_hist.append(env.board[end] > env.board[start - 1])
         reward_hist.append(total_reward)
         cost_hist.append((ave_cost / env.turn))
         if (i % 100 == 0):
             print(f'Episode {i:04d}, cost: {(sum(cost_hist[-100:]) / 100):.2f}, reward: {(sum(reward_hist[-100:]) / 100):.2f}, win rate: {(sum(win_hist[-100:]) / 100):.2f}, eps: {epsilon:.2f}')
 
-    torch.save(model.state_dict(), 'output/model.pth')
+    torch.save(model.state_dict(), f'output/{player}_{run}.pth')
     return cost_hist, reward_hist, win_hist
 
 
 
 
 if __name__ == "__main__":
-    cost_hist, reward_hist, win_hist = train_model_pytorch()
-    plot(cost_hist, model='cost')
-    plot(reward_hist, model='reward')
-    plot(win_hist, model='wins')
+    player, run = 1, 0
+    cost_hist, reward_hist, win_hist = train_model_pytorch(player, run)
+    plot(cost_hist, model=f'cost_{player}_{run}')
+    plot(reward_hist, model=f'reward_{player}_{run}')
+    plot(win_hist, model=f'wins_{player}_{run}')
 
