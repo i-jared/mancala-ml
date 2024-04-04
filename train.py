@@ -13,8 +13,8 @@ from torch_network import NeuralNetwork
 def plot(data: List[float], model: str = None):
     plt.plot(data)
     plt.xlabel("Iteration")
-    plt.ylabel(model if model is not None else "Cost")
-    plt.title(model if model is not None else "Cost")
+    plt.ylabel(model if model is not None else "Data")
+    plt.title(model if model is not None else "Plot")
     plt.savefig(f"output/{'fig' if model is None else model}.png")
     plt.show(block=True)
 
@@ -28,7 +28,7 @@ def train_model_pytorch(player: int, run: int):
     # initialize model and optimizer
     model = NeuralNetwork().float().to(device)
     target_model = NeuralNetwork().float().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
     env = MancalaBoard()
     start = 0 if player == 0 else 7
     end = 6 if player == 0 else 13
@@ -47,9 +47,9 @@ def train_model_pytorch(player: int, run: int):
     cost_hist = []
     win_hist = []
 
-    torch.set_default_tensor_type(torch.FloatTensor)
+    torch.set_default_dtype(torch.float)
 
-    for i in range(500):
+    for i in range(10000):
     # for i in range(1):
         state = torch.tensor(env.reset(player) / 48.0).float().to(device)
         done = False
@@ -65,7 +65,7 @@ def train_model_pytorch(player: int, run: int):
                     q_pred = model(state)
 
                 q_values = torch.where(state[start:end] > 0 , 1, 0)*q_pred
-                action = (torch.where(q_values != 0, q_values, -math.inf)).argmax().item() + start #max
+                action = (torch.where(state[start:end] > 0, q_values, -math.inf)).argmax().item() + start #max
 
             # make the action
             next_state, reward, done = env.step(action, player)
@@ -116,13 +116,18 @@ def train_model_pytorch(player: int, run: int):
             print(f'Episode {i:04d}, cost: {(sum(cost_hist[-100:]) / 100):.2f}, reward: {(sum(reward_hist[-100:]) / 100):.2f}, win rate: {(sum(win_hist[-100:]) / 100):.2f}, eps: {epsilon:.2f}')
 
     torch.save(model.state_dict(), f'output/{player}_{run}.pth')
-    return cost_hist, reward_hist, win_hist
+    
+    # get better data for graph
+    cumulative_win_percentage = [sum(win_hist[max(0, i-100):i])/min(i,100) for i in range(1, len(win_hist) + 1)]
+    cumulative_reward_hist = [sum(reward_hist[max(0, i-100):i])/min(i,100) for i in range(1, len(reward_hist) + 1)]
+
+    return cost_hist, cumulative_reward_hist, cumulative_win_percentage
 
 
 
 
 if __name__ == "__main__":
-    player, run = 1, 0
+    player, run = 0, 2
     cost_hist, reward_hist, win_hist = train_model_pytorch(player, run)
     plot(cost_hist, model=f'cost_{player}_{run}')
     plot(reward_hist, model=f'reward_{player}_{run}')

@@ -42,7 +42,7 @@ def test_model_pytorch_random(model_player: int, model_name: str):
     wins = []
 
     ## Test going first
-    for _ in range(1000):
+    for _ in range(10000):
         player = 0
         done = False
         state = torch.tensor(env.reset() / 48.0).float()
@@ -50,7 +50,7 @@ def test_model_pytorch_random(model_player: int, model_name: str):
             if player == model_player:
                 with torch.no_grad():
                     q_pred = model(state)
-                action = (torch.where(state[0 + (model_player * 7):6 + (model_player * 7)] > 0 , 1, 0)*q_pred).argmax().item() + (model_player * 7) # max
+                action = torch.where(state[0 + (model_player * 7):6 + (model_player * 7)] > 0 , q_pred, -math.inf).argmax().item() + (model_player * 7) # max
                 state, player, done = env.step_test(action, player)
                 state = torch.tensor(state / 48.0).float()
             else:
@@ -83,6 +83,6 @@ def test_random():
 
 
 if __name__ == "__main__":
-    test_model_pytorch_random(0, '0_0')
+    test_model_pytorch_random(0, '0_2')
 
 
