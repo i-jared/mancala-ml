@@ -1,14 +1,24 @@
+import sys
+import json
 import math
+import os
 import numpy as np
 import torch
 from agents import HumanAgent, RandomAgent
 from mancala import MancalaBoard
-from torch_network import NeuralNetwork
+from torch_network import NeuralNetwork, build_layers
 
 
 def test_model_pytorch_human(model_player: int, model_name: str):
+    # load model weights
+    model_path = f'output/{model_name}.pth'
+    if not os.path.exists(model_path):
+        model_path = f'output/saved/{model_name}/{model_name}.pth'
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found in both attempted locations: {model_path} and ../{model_name}.pth")
+
     model = NeuralNetwork()
-    model.load_state_dict(torch.load(f'output/{model_name}.pth'))
+    model.load_state_dict(torch.load(model_path))
     start = 0 if model_player == 0 else 7
     end = 6 if model_player == 0 else 13
     human = HumanAgent()
@@ -35,9 +45,21 @@ def test_model_pytorch_human(model_player: int, model_name: str):
         print(env)
 
 def test_model_pytorch_random(model_player: int, model_name: str):
-    model = NeuralNetwork()
-    model.load_state_dict(torch.load(f'output/{model_name}.pth'))
+    model_path = f'output/{model_name}.pth'
+    if not os.path.exists(model_path):
+        model_path = f'output/saved/{model_name}/{model_name}.pth'
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found in both attempted locations: {model_path} and ../{model_name}.pth")
+
+    with open(f'output/{model_name}_config.json', 'r') as file:
+        config = json.load(file)
+        layers = build_layers(config["layer_dims"], config["activations"])
+
+    device = "mps"
     env = MancalaBoard()
+
+    model = NeuralNetwork(layers=layers).float()
+    model.load_state_dict(torch.load(model_path))
     robot = RandomAgent((model_player + 1) % 2)
     wins = []
 
@@ -83,6 +105,24 @@ def test_random():
 
 
 if __name__ == "__main__":
-    test_model_pytorch_random(0, '0_2')
+    if len(sys.argv) > 4:
+        print("Usage: python test.py [model_type ('human', 'random')] [player (0, 1)] [run (0,1,...)]")
+        sys.exit(1)
+    try:
+        type: str = sys.argv[1]
+        player = int(sys.argv[2])
+        run = int(sys.argv[3])
+        print(f'Testing {type} for player {player} on run {run}')
+    except ValueError:
+        print('Error: player and run must be integers, type must be "human" or "random"')
+        sys.exit(1)
+
+    if type == 'human':
+        test_model_pytorch_human(player, f'{player}_{run}')
+    elif type == 'random':
+        test_model_pytorch_random(player, f'{player}_{run}')
+    else:
+        print('Error: type must be "human" or "random"')
+        sys.exit(1)
 
 

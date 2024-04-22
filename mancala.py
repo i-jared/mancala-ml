@@ -133,9 +133,9 @@ class MancalaBoard:
         their_score: int = self.board[their_goal]
         if self.gameOver:
             if your_score > their_score:
-                return 1.0
+                return 2.0
             elif their_score > your_score:
-                return -1.0
+                return -2.0
             else:
                 return 0.0
         reward = 0.0

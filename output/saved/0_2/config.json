@@ -1,0 +1,17 @@
+{
+    "player": 0,
+    "run": 1,
+    "discount": 0.99,
+    "epsilon": 1.0,
+    "epsilon_decay": 0.99,
+    "epsilon_min": 0.05,
+    "tau": 0.005,
+    "learning_rate":1e-5,
+    "max_buffer_size": 10000,
+    "batch_size": 32,
+    "target_update_frequency": 100000,
+    "epochs": 10000,
+    "layer_dims": [14, 128, 64, 6],
+    "activations": ["relu", "relu", "linear"]
+}
+
