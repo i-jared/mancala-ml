@@ -9,4 +9,8 @@ A machine learning algorithm that learns and plays mancala better than my wife
 ## Milestones
 - [x] follows the rules of mancala
 - [x] descends *at all*
+- [ ] beats random moves 99% of the time
 - [ ] beats shelby
+
+## Progress
+- currently beats random moves ~90% of the time

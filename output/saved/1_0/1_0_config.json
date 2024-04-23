@@ -1,0 +1,20 @@
+{
+  "player": 1,
+  "run": 33,
+  "tau": 0.005,
+  "discount": 0.99,
+  "epsilon": 1.0,
+  "decay_rate": 0.99,
+  "min_epsilon": 0.05,
+  "epochs": 3000,
+  "learning_rate": 1e-5,
+  "batch_size": 32,
+  "update_frequency": 1,
+  "max_buffer_size": 10000,
+  "layer_dims": [14, 128, 64, 6],
+  "activations": ["relu", "relu", "linear"],
+  "rewards": [
+    3.159536941104464, 2.647758181456968, 0.24823835052289178,
+    0.42423482024078735, 0.07093354891003528, 0.4388524607583819
+  ]
+}

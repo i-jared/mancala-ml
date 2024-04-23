@@ -12,16 +12,18 @@ from mancala import MancalaBoard
 from torch_network import NeuralNetwork, build_layers
 
 
-def plot(data: List[float], model: str = None):
+def plot(data: List[float], model: str = None, show: bool = True):
     plt.plot(data)
     plt.xlabel("Iteration")
     plt.ylabel(model if model is not None else "Data")
     plt.title(model if model is not None else "Plot")
     plt.savefig(f"output/{'fig' if model is None else model}.png")
-    plt.show(block=True)
+    if show:
+        plt.show(block=show)
+    plt.clf()
 
 
-def train_model_pytorch(player: int, run: int):
+def train_model_pytorch(player: int, run: int, rewards):
     # get device
     device = "mps"
     print(f"Using {device} device")
@@ -35,22 +37,24 @@ def train_model_pytorch(player: int, run: int):
     config = {
         "player": player,
         "run": run,
-        "tau": 0.0025,
+        "tau": 0.005,
         "discount": 0.99,
         "epsilon": 1.0,
-        "decay_rate": 0.999,
+        "decay_rate": 0.99,
         "min_epsilon": 0.05,
-        "epochs": 20000,
-        "learning_rate": 1e-6,
+        "epochs": 3000,
+        "learning_rate": 1e-5,
         "batch_size": 32,
         "update_frequency": 1,
-        "max_buffer_size": 100000,
+        "max_buffer_size": 10000,
         "layer_dims": [14, 128, 64, 6],
         "activations": ["relu", "relu", "linear"],
+        "rewards": rewards,  # win, lose, repeat, capture, gain 1, opp gains 1
     }
 
-    layers = build_layers(config["layer_dims"], config["activations"])
+    env.initRewards(rewards)
 
+    layers = build_layers(config["layer_dims"], config["activations"])
     model = NeuralNetwork(layers=layers).float().to(device)
     target_model = NeuralNetwork(layers=layers).float().to(device)
 
@@ -125,8 +129,9 @@ def train_model_pytorch(player: int, run: int):
                     )
 
                     # make predictions
-                    q_preds = model(states).gather(1, actions)
+                    q_preds = model(states).gather(1, actions - start)
                     next_state_qs = torch.zeros(batch_size, device=device)
+                    # TODO: below might be the error... am i selecting valid
                     with torch.no_grad():
                         next_state_qs[mask.squeeze()] = (
                             target_model(next_states).max(1).values
@@ -173,17 +178,27 @@ def train_model_pytorch(player: int, run: int):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 3:
-        print("Usage: python train.py <player> <run>")
-        sys.exit(1)
-    try:
-        player = int(sys.argv[1])
-        run = int(sys.argv[2])
-    except ValueError:
-        print("Usage: python train.py <player (int)> <run (int)>")
-        sys.exit(1)
+    # if len(sys.argv) > 3:
+    #     print("Usage: python train.py <player> <run>")
+    #     sys.exit(1)
+    # try:
+    #     player = int(sys.argv[1])
+    #     run = int(sys.argv[2])
+    # except ValueError:
+    #     print("Usage: python train.py <player (int)> <run (int)>")
+    #     sys.exit(1)
 
-    cost_hist, reward_hist, win_hist = train_model_pytorch(player, run)
-    plot(cost_hist, model=f"cost_{player}_{run}")
-    plot(reward_hist, model=f"reward_{player}_{run}")
-    plot(win_hist, model=f"wins_{player}_{run}")
+    for i in range(50):
+        player, run = 0, i
+        rewards = [
+            random.uniform(0, 5.0),  # win
+            random.uniform(0, 5.0),  # lose
+            random.uniform(0, 0.3),  # repeat
+            random.uniform(0, 0.3),  # capture x N
+            random.uniform(0, 0.2),  # new pieces in goal
+            random.uniform(0, 0.2),  # new pieces in opp goal
+        ]
+        cost_hist, reward_hist, win_hist = train_model_pytorch(player, run, rewards)
+        plot(cost_hist, model=f"cost_{player}_{run}", show=False)
+        plot(reward_hist, model=f"reward_{player}_{run}", show=False)
+        plot(win_hist, model=f"wins_{player}_{run}", show=False)

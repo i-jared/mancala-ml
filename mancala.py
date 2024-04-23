@@ -15,6 +15,7 @@ class MancalaBoard:
         self.board: np.array = np.array([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0])
         self.turn: int = 0
         self.gameOver: bool = False
+        self.rewards = [1.0, 1.0, 0.05, 0.05, 0.01, 0.01]
 
         if player == 1:
             action = np.random.randint(6)
@@ -66,7 +67,7 @@ class MancalaBoard:
             and dest_i >= (skip + 1) % 14
         ):
             captured = self.board[12 - dest_i]
-            self.board[goal_i] += self.board[12 - dest_i] + 1
+            self.board[goal_i] += captured + 1
             self.board[dest_i] = 0
             self.board[12 - dest_i] = 0
 
@@ -102,7 +103,7 @@ class MancalaBoard:
         repeat = dest_i == goal_i
 
         ## opponent's moves
-        if dest_i != goal_i:
+        if not repeat:
             dest_i, goal_i, skip = skip, skip, goal_i
             while dest_i == goal_i and not self.gameOver:
                 action = (
@@ -133,15 +134,19 @@ class MancalaBoard:
         their_score: int = self.board[their_goal]
         if self.gameOver:
             if your_score > their_score:
-                return 2.0
+                return self.rewards[0]
             elif their_score > your_score:
-                return -2.0
+                return -self.rewards[1]
             else:
                 return 0.0
         reward = 0.0
         if bonus_move:
-            reward += 0.1
-        reward += 0.1 * captured
-        reward += 0.01 * (self.board[goal] - old_board[goal])
-        reward -= 0.01 * (self.board[their_goal] - old_board[their_goal])
+            reward += self.rewards[2]
+        reward += self.rewards[3] * captured
+        reward += self.rewards[4] * (self.board[goal] - old_board[goal])
+        reward -= self.rewards[5] * (self.board[their_goal] - old_board[their_goal])
         return reward
+
+    def initRewards(self, reward_list):
+        assert len(reward_list) == 6
+        self.rewards = reward_list
