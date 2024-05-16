@@ -1,6 +1,8 @@
+import argparse
 from collections import deque
 import json
 import math
+import os
 import sys
 import matplotlib.pyplot as plt
 import random
@@ -23,7 +25,13 @@ def plot(data: List[float], model: str = None, show: bool = True):
     plt.clf()
 
 
-def train_model_pytorch(player: int, run: int, rewards):
+def train_model_pytorch(
+    player: int,
+    run: int,
+    rewards: List[float],
+    adversary_path: str,
+    pretrain_weights_path: str,
+):
     # get device
     device = "mps"
     print(f"Using {device} device")
@@ -37,13 +45,13 @@ def train_model_pytorch(player: int, run: int, rewards):
     config = {
         "player": player,
         "run": run,
-        "tau": 0.005,
+        "tau": 0.001,
         "discount": 0.99,
         "epsilon": 1.0,
         "decay_rate": 0.99,
         "min_epsilon": 0.05,
-        "epochs": 3000,
-        "learning_rate": 1e-5,
+        "epochs": 1600,
+        "learning_rate": 5e-6,
         "batch_size": 32,
         "update_frequency": 1,
         "max_buffer_size": 10000,
@@ -52,11 +60,14 @@ def train_model_pytorch(player: int, run: int, rewards):
         "rewards": rewards,  # win, lose, repeat, capture, gain 1, opp gains 1
     }
 
-    env.initRewards(rewards)
+    env.init_rewards(rewards)
 
     layers = build_layers(config["layer_dims"], config["activations"])
     model = NeuralNetwork(layers=layers).float().to(device)
     target_model = NeuralNetwork(layers=layers).float().to(device)
+    if pretrain_weights_path is not None:
+        model.load_state_dict(torch.load(pretrain_weights_path))
+        target_model.load_state_dict(torch.load(pretrain_weights_path))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
     discount = config["discount"]
@@ -71,7 +82,22 @@ def train_model_pytorch(player: int, run: int, rewards):
 
     # save config
     with open(f"output/{player}_{run}_config.json", "w") as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
+    if adversary_path is not None:
+        adv_config_path = f"{adversary_path}/config.json"
+        if not os.path.exists(adv_config_path):
+            adv_config_path = f"{adversary_path}_config.json"
+        with open(adv_config_path, "r") as file:
+            adv_config = json.load(file)
+            adv_layers = build_layers(
+                adv_config["layer_dims"], adv_config["activations"]
+            )
+        adversary_model = NeuralNetwork(layers=adv_layers).float().to(device)
+        adv_weight_path = f"{adversary_path}/weights.pth"
+        if not os.path.exists(adv_weight_path):
+            adv_weight_path = f"{adversary_path}.pth"
+        adversary_model.load_state_dict(torch.load(adv_weight_path))
+        env.init_adversary(adversary_model)
 
     reward_hist = []
     cost_hist = []
@@ -178,27 +204,39 @@ def train_model_pytorch(player: int, run: int, rewards):
 
 
 if __name__ == "__main__":
-    # if len(sys.argv) > 3:
-    #     print("Usage: python train.py <player> <run>")
-    #     sys.exit(1)
-    # try:
-    #     player = int(sys.argv[1])
-    #     run = int(sys.argv[2])
-    # except ValueError:
-    #     print("Usage: python train.py <player (int)> <run (int)>")
-    #     sys.exit(1)
+    parser = argparse.ArgumentParser(description="Train a model for the game.")
+    parser.add_argument("player", type=int, help="Player number (integer)")
+    parser.add_argument("run", type=int, help="Run number (integer)")
+    parser.add_argument(
+        "-a", "--adversary", type=str, help="Path to adversary model folder (optional)"
+    )
+    parser.add_argument(
+        "-p", "--pretrain", type=str, help="Path to pre-trained weights (optional)"
+    )
 
-    for i in range(50):
-        player, run = 0, i
-        rewards = [
-            random.uniform(0, 5.0),  # win
-            random.uniform(0, 5.0),  # lose
-            random.uniform(0, 0.3),  # repeat
-            random.uniform(0, 0.3),  # capture x N
-            random.uniform(0, 0.2),  # new pieces in goal
-            random.uniform(0, 0.2),  # new pieces in opp goal
-        ]
-        cost_hist, reward_hist, win_hist = train_model_pytorch(player, run, rewards)
-        plot(cost_hist, model=f"cost_{player}_{run}", show=False)
-        plot(reward_hist, model=f"reward_{player}_{run}", show=False)
-        plot(win_hist, model=f"wins_{player}_{run}", show=False)
+    args = parser.parse_args()
+
+    player = args.player
+    run = args.run
+    adversary_path = args.adversary
+    pretrain_weights_path = args.pretrain
+
+    #    for i in range(25):
+    #        player, run = 1, i + 15
+    #        rewards = [
+    #        random.uniform(1, 5.0),  # win
+    #        random.uniform(1, 5.0),  # lose
+    #        random.uniform(0, 0.3),  # repeat
+    #        random.uniform(0, 0.3),  # capture x N
+    #        random.uniform(0, 0.2),  # new pieces in goal
+    #        random.uniform(0, 0.2),  # new pieces in opp goal
+    #        ]
+
+    rewards = [3.0, 2.5, 0.1, 0.2, 0.1, 0.05]
+
+    cost_hist, reward_hist, win_hist = train_model_pytorch(
+        player, run, rewards, adversary_path, pretrain_weights_path
+    )
+    plot(cost_hist, model=f"{player}_{run}_cost", show=False)
+    plot(reward_hist, model=f"{player}_{run}_reward", show=False)
+    plot(win_hist, model=f"{player}_{run}_wins", show=False)

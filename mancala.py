@@ -1,7 +1,9 @@
 ### Mancala Environment
 ### stores board state and implements the rules of the game
 
+import math
 import numpy as np
+import torch
 
 
 class MancalaBoard:
@@ -9,6 +11,7 @@ class MancalaBoard:
 
     def __init__(self):
         self.reset()
+        self.adversary = None
 
     def reset(self, player: int = 0) -> np.array:
         """Reset the board to its original state."""
@@ -18,8 +21,16 @@ class MancalaBoard:
         self.rewards = [1.0, 1.0, 0.05, 0.05, 0.01, 0.01]
 
         if player == 1:
-            action = np.random.randint(6)
-            self.step_test(action, 0)
+            if self.adversary is not None:
+                state = torch.tensor(self.board / 48.0).float().to("mps")
+                with torch.no_grad():
+                    q_pred = self.adversary(state)
+
+                q_values = torch.where(state[0:6] > 0, 1, 0) * q_pred
+                action = q_values.argmax().item()
+            else:
+                action = np.random.randint(6)
+                self.step_test(action, 0)
             if action == 2:
                 action = np.random.choice(np.where(self.board[:6] > 0)[0])
                 self.step_test(action, 0)
@@ -34,7 +45,7 @@ class MancalaBoard:
         game += "________________\n"
         return game
 
-    def _checkGameOver(self):
+    def _check_game_over(self):
         """Check if the game is over."""
         if np.sum(self.board[0:6]) == 0:
             for i in range(7, 13):
@@ -72,7 +83,7 @@ class MancalaBoard:
             self.board[12 - dest_i] = 0
 
         ### game over cases ###
-        self._checkGameOver()
+        self._check_game_over()
         return dest_i, captured
 
     def step_test(self, action: int, player: int):
@@ -106,21 +117,35 @@ class MancalaBoard:
         if not repeat:
             dest_i, goal_i, skip = skip, skip, goal_i
             while dest_i == goal_i and not self.gameOver:
-                action = (
-                    np.random.choice(np.where(self.board[goal_i - 6 : goal_i] > 0)[0])
-                    + goal_i
-                    - 6
-                )
+                if self.adversary is not None:
+                    state = torch.tensor(self.board / 48.0).float().to("mps")
+                    start = goal_i - 6
+                    end = goal_i
+                    with torch.no_grad():
+                        q_pred = self.adversary(state)
+
+                    q_values = torch.where(state[start:end] > 0, 1, 0) * q_pred
+                    action = (
+                        torch.where(state[start:end] > 0, q_values, -math.inf)
+                    ).argmax().item() + start  # max
+                else:
+                    action = (
+                        np.random.choice(
+                            np.where(self.board[goal_i - 6 : goal_i] > 0)[0]
+                        )
+                        + goal_i
+                        - 6
+                    )
                 dest_i, _ = self._move(action, goal_i, skip)
 
         # return the experience data
         return (
             self.board.copy(),
-            self._getReward(old_board, repeat, captured, player),
+            self._get_reward(old_board, repeat, captured, player),
             self.gameOver,
         )
 
-    def _getReward(
+    def _get_reward(
         self,
         old_board: np.ndarray,
         bonus_move: bool = False,
@@ -147,6 +172,9 @@ class MancalaBoard:
         reward -= self.rewards[5] * (self.board[their_goal] - old_board[their_goal])
         return reward
 
-    def initRewards(self, reward_list):
+    def init_rewards(self, reward_list):
         assert len(reward_list) == 6
         self.rewards = reward_list
+
+    def init_adversary(self, model):
+        self.adversary = model
