@@ -1,5 +1,6 @@
 import argparse
 from collections import deque
+import time
 import json
 import math
 import os
@@ -33,7 +34,7 @@ def train_model_pytorch(
     pretrain_weights_path: str,
 ):
     # get device
-    device = "mps"
+    device = "cuda"
     print(f"Using {device} device")
 
     # initialize model and optimizer
@@ -50,8 +51,13 @@ def train_model_pytorch(
         "epsilon": 1.0,
         "decay_rate": 0.99,
         "min_epsilon": 0.05,
+<<<<<<< HEAD
         "epochs": 1600,
         "learning_rate": 5e-6,
+=======
+        "epochs": 1000,
+        "learning_rate": 1e-5,
+>>>>>>> origin/main
         "batch_size": 32,
         "update_frequency": 1,
         "max_buffer_size": 10000,
@@ -221,22 +227,21 @@ if __name__ == "__main__":
     adversary_path = args.adversary
     pretrain_weights_path = args.pretrain
 
-    #    for i in range(25):
-    #        player, run = 1, i + 15
-    #        rewards = [
-    #        random.uniform(1, 5.0),  # win
-    #        random.uniform(1, 5.0),  # lose
-    #        random.uniform(0, 0.3),  # repeat
-    #        random.uniform(0, 0.3),  # capture x N
-    #        random.uniform(0, 0.2),  # new pieces in goal
-    #        random.uniform(0, 0.2),  # new pieces in opp goal
-    #        ]
+    rewards = [
+        2.5,   # win
+        2.0,   # lose
+        0.1,   # repeat
+        0.02,  # capture x N
+        0.01,  # new pieces in goal
+        0.005, # new pieces in opp goal
+    ]
 
-    rewards = [3.0, 2.5, 0.1, 0.2, 0.1, 0.05]
-
+    start = time.time()
     cost_hist, reward_hist, win_hist = train_model_pytorch(
         player, run, rewards, adversary_path, pretrain_weights_path
     )
+    end = time.time()
+    print('time: ', end-start)
     plot(cost_hist, model=f"{player}_{run}_cost", show=False)
     plot(reward_hist, model=f"{player}_{run}_reward", show=False)
     plot(win_hist, model=f"{player}_{run}_wins", show=False)
