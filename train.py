@@ -51,13 +51,8 @@ def train_model_pytorch(
         "epsilon": 1.0,
         "decay_rate": 0.99,
         "min_epsilon": 0.05,
-<<<<<<< HEAD
-        "epochs": 1600,
-        "learning_rate": 5e-6,
-=======
         "epochs": 1000,
         "learning_rate": 1e-5,
->>>>>>> origin/main
         "batch_size": 32,
         "update_frequency": 1,
         "max_buffer_size": 10000,
