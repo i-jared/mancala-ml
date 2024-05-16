@@ -1,4 +1,5 @@
 from collections import deque
+import time
 import json
 import math
 import sys
@@ -25,7 +26,7 @@ def plot(data: List[float], model: str = None, show: bool = True):
 
 def train_model_pytorch(player: int, run: int, rewards):
     # get device
-    device = "mps"
+    device = "cuda"
     print(f"Using {device} device")
 
     # initialize model and optimizer
@@ -42,7 +43,7 @@ def train_model_pytorch(player: int, run: int, rewards):
         "epsilon": 1.0,
         "decay_rate": 0.99,
         "min_epsilon": 0.05,
-        "epochs": 3000,
+        "epochs": 1000,
         "learning_rate": 1e-5,
         "batch_size": 32,
         "update_frequency": 1,
@@ -178,27 +179,28 @@ def train_model_pytorch(player: int, run: int, rewards):
 
 
 if __name__ == "__main__":
-    # if len(sys.argv) > 3:
-    #     print("Usage: python train.py <player> <run>")
-    #     sys.exit(1)
-    # try:
-    #     player = int(sys.argv[1])
-    #     run = int(sys.argv[2])
-    # except ValueError:
-    #     print("Usage: python train.py <player (int)> <run (int)>")
-    #     sys.exit(1)
+    if len(sys.argv) > 3:
+        print("Usage: python train.py <player> <run>")
+        sys.exit(1)
+    try:
+        player = int(sys.argv[1])
+        run = int(sys.argv[2])
+    except ValueError:
+        print("Usage: python train.py <player (int)> <run (int)>")
+        sys.exit(1)
 
-    for i in range(50):
-        player, run = 0, i
-        rewards = [
-            random.uniform(0, 5.0),  # win
-            random.uniform(0, 5.0),  # lose
-            random.uniform(0, 0.3),  # repeat
-            random.uniform(0, 0.3),  # capture x N
-            random.uniform(0, 0.2),  # new pieces in goal
-            random.uniform(0, 0.2),  # new pieces in opp goal
-        ]
-        cost_hist, reward_hist, win_hist = train_model_pytorch(player, run, rewards)
-        plot(cost_hist, model=f"cost_{player}_{run}", show=False)
-        plot(reward_hist, model=f"reward_{player}_{run}", show=False)
-        plot(win_hist, model=f"wins_{player}_{run}", show=False)
+    rewards = [
+        2.5,   # win
+        2.0,   # lose
+        0.1,   # repeat
+        0.02,  # capture x N
+        0.01,  # new pieces in goal
+        0.005, # new pieces in opp goal
+    ]
+    start = time.time()
+    cost_hist, reward_hist, win_hist = train_model_pytorch(player, run, rewards)
+    end = time.time()
+    print('time: ', end-start)
+    plot(cost_hist, model=f"cost_{player}_{run}", show=False)
+    plot(reward_hist, model=f"reward_{player}_{run}", show=False)
+    plot(win_hist, model=f"wins_{player}_{run}", show=False)
