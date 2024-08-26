@@ -14,3 +14,5 @@ A machine learning algorithm that learns and plays mancala better than my wife
 
 ## Progress
 - currently beats random moves ~90% of the time
+
+## Usage

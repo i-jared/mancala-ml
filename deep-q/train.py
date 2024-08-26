@@ -34,7 +34,7 @@ def train_model_pytorch(
     pretrain_weights_path: str,
 ):
     # get device
-    device = "cuda"
+    device = "mps"
     print(f"Using {device} device")
 
     # initialize model and optimizer
@@ -46,18 +46,18 @@ def train_model_pytorch(
     config = {
         "player": player,
         "run": run,
-        "tau": 0.001,
-        "discount": 0.99,
+        "tau": 0.003,
+        "discount": 1.00,
         "epsilon": 1.0,
-        "decay_rate": 0.99,
-        "min_epsilon": 0.05,
-        "epochs": 1000,
-        "learning_rate": 1e-5,
-        "batch_size": 32,
+        "decay_rate": 0.999,
+        "min_epsilon": 0.01,
+        "epochs": 5000,
+        "learning_rate": 1e-4,
+        "batch_size": 64,
         "update_frequency": 1,
         "max_buffer_size": 10000,
-        "layer_dims": [14, 128, 64, 6],
-        "activations": ["relu", "relu", "linear"],
+        "layer_dims": [14, 256, 128, 64, 6],
+        "activations": ["relu", "relu", "relu", "linear"],
         "rewards": rewards,  # win, lose, repeat, capture, gain 1, opp gains 1
     }
 
@@ -70,7 +70,12 @@ def train_model_pytorch(
         model.load_state_dict(torch.load(pretrain_weights_path))
         target_model.load_state_dict(torch.load(pretrain_weights_path))
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"], weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.993)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr = 0.01, total_steps=config["epochs"])
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000], gamma=0.5)
+
     discount = config["discount"]
     epsilon = config["epsilon"]
     decay_rate = config["decay_rate"]
@@ -181,12 +186,15 @@ def train_model_pytorch(
                 target_dict[key] = model_dict[key] * tau + target_dict[key] * (1 - tau)
             target_model.load_state_dict(target_dict)
         epsilon = max(epsilon * decay_rate, min_epsilon)
+        scheduler.step()
         win_hist.append(env.board[end] > env.board[start - 1])
         reward_hist.append(total_reward)
         cost_hist.append((ave_cost / env.turn))
         if i % 100 == 0:
+            # if (i != 0):
+                # scheduler.step(sum(cost_hist[-100:]) / 100)
             print(
-                f"Episode {i:04d}, cost: {(sum(cost_hist[-100:]) / 100):.2f}, reward: {(sum(reward_hist[-100:]) / 100):.2f}, win rate: {(sum(win_hist[-100:]) / 100):.2f}, eps: {epsilon:.2f}"
+                f"Episode {i:04d}, cost: {(sum(cost_hist[-100:]) / 100):.2f}, reward: {(sum(reward_hist[-100:]) / 100):.2f}, win rate: {(sum(win_hist[-100:]) / 100):.2f}, eps: {epsilon:.2f}, lr: {scheduler.get_last_lr()[0]:.2e}"
             )
 
     torch.save(model.state_dict(), f"output/{player}_{run}.pth")
@@ -202,6 +210,78 @@ def train_model_pytorch(
     ]
 
     return cost_hist, cumulative_reward_hist, cumulative_win_percentage
+
+
+# def monte_carlo_tree_search(env, model, num_simulations=1000, exploration_constant=1.4):
+#     class MCTSNode:
+#         def __init__(self, state, parent=None, action=None):
+#             self.state = state
+#             self.parent = parent
+#             self.action = action
+#             self.children = {}
+#             self.visits = 0
+#             self.value = 0
+
+#         def is_fully_expanded(self):
+#             return len(self.children) == len(env.get_valid_moves(self.state))
+
+#         def select_child(self):
+#             return max(self.children.values(), key=lambda node: node.ucb_score(exploration_constant))
+
+#         def expand(self):
+#             action = random.choice([a for a in env.get_valid_moves(self.state) if a not in self.children])
+#             next_state, _ = env.step(self.state, action)
+#             child = MCTSNode(next_state, self, action)
+#             self.children[action] = child
+#             return child
+
+#         def backpropagate(self, result):
+#             self.visits += 1
+#             self.value += result
+#             if self.parent:
+#                 self.parent.backpropagate(result)
+
+#         def ucb_score(self, c):
+#             if self.visits == 0:
+#                 return float('inf')
+#             return (self.value / self.visits) + c * math.sqrt(math.log(self.parent.visits) / self.visits)
+
+#     root = MCTSNode(env.get_state())
+
+#     for _ in range(num_simulations):
+#         node = root
+#         while node.is_fully_expanded():
+#             node = node.select_child()
+        
+#         if not node.is_fully_expanded():
+#             node = node.expand()
+        
+#         state = node.state
+#         while not env.is_game_over(state):
+#             action = env.get_random_action(state)
+#             state, _ = env.step(state, action)
+        
+#         result = env.get_result(state)
+#         node.backpropagate(result)
+
+#     return max(root.children.items(), key=lambda item: item[1].visits)[0]
+
+# def mcts_policy(env, model, state):
+#     return monte_carlo_tree_search(env, model)
+
+# # Example usage in the training loop
+# for episode in range(num_episodes):
+#     state = env.reset()
+#     done = False
+#     while not done:
+#         action = mcts_policy(env, model, state)
+#         next_state, reward, done, _ = env.step(action)
+#         # Add experience to replay buffer or update model directly
+#         state = next_state
+    
+#     # Update model periodically or after each episode
+#     update_model(model, replay_buffer)
+
 
 
 if __name__ == "__main__":
@@ -223,12 +303,12 @@ if __name__ == "__main__":
     pretrain_weights_path = args.pretrain
 
     rewards = [
-        2.5,   # win
-        2.0,   # lose
-        0.1,   # repeat
-        0.02,  # capture x N
-        0.01,  # new pieces in goal
-        0.005, # new pieces in opp goal
+        1.0,   # win
+        0.0,   # lose
+        0.0,   # repeat
+        0.0,  # capture x N
+        0.00,  # new pieces in goal
+        0.00, # new pieces in opp goal
     ]
 
     start = time.time()
